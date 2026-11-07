@@ -31,7 +31,9 @@ def test_task_groups_run_in_order(dag_bag):
 
 def test_every_transform_has_sql_file(dag_bag):
     dag = dag_bag.get_dag("flights_data_pipeline")
-    query_dir = DAGS_DIR / "flights_data_pipeline" / "query"
-    for task in dag.tasks:
-        if task.task_id.startswith("transform."):
-            assert (query_dir / task.sql).exists(), task.sql
+    query_dir = DAGS_DIR / "flights_data_pipeline" / "query" / "final"
+    transform_ids = [t.task_id for t in dag.tasks if t.task_id.startswith("transform.")]
+    assert transform_ids
+    for task_id in transform_ids:
+        table = task_id.split(".", 1)[1]
+        assert (query_dir / f"{table}.sql").exists(), table
