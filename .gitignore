@@ -1,4 +1,9 @@
-__pycache__
+__pycache__/
+*.pyc
 .env
 /data/source/init.sql
 *(2)*
+logs/
+.pytest_cache/
+.ruff_cache/
+.venv/
