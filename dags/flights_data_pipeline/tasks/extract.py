@@ -4,15 +4,16 @@ from helper.minio import CustomMinio
 import logging
 import pandas as pd
 import json
-from airflow.models import Variable
-from datetime import timedelta
+from flights_data_pipeline.tasks.window import extract_query, incremental_window
+from flights_data_pipeline.tasks.window import object_name as build_object_name
 
 
 class Extract:
     @staticmethod
     def _pacflight_db(table_name, incremental, **kwargs):
         """
-        Extract all data from Pacflight database (non-incremental).
+        Extract a table from the Pacflight database. In incremental mode only rows
+        created or updated inside the run's data interval are pulled.
 
         Args:
             table_name (str): Name of the table to extract data from.
@@ -32,21 +33,12 @@ class Extract:
             connection = pg_hook.get_conn()
             cursor = connection.cursor()
 
-            query = ""
-            if incremental:
-                date = kwargs['ds']
-                query = f"""
-                    SELECT * FROM bookings.{table_name}
-                    WHERE created_at::DATE = '{date}'::DATE - INTERVAL '1 DAY' 
-                    OR updated_at::DATE = '{date}'::DATE - INTERVAL '1 DAY' ;
-                """
-                object_name = f'/temp/{table_name}-{(pd.to_datetime(date) - timedelta(days=1)).strftime("%Y-%m-%d")}.csv'
-            else:
-                query = f"SELECT * FROM bookings.{table_name};"
-                object_name = f'/temp/{table_name}.csv'
+            params = incremental_window(kwargs["data_interval_start"], kwargs["data_interval_end"]) if incremental else None
+            query = extract_query(table_name, incremental)
+            object_name = build_object_name(table_name, incremental, kwargs["data_interval_start"])
 
-            logging.info(f"[Extract] Executing query: {query}")
-            cursor.execute(query)
+            logging.info(f"[Extract] Executing query: {query} with {params}")
+            cursor.execute(query, params)
             result = cursor.fetchall()
 
             column_list = [desc[0] for desc in cursor.description]
