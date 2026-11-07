@@ -6,7 +6,7 @@ import logging
 
 @dag(
     dag_id="test_pacflight_connections",
-    schedule_interval=None,
+    schedule=None,
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["test", "connection"],
