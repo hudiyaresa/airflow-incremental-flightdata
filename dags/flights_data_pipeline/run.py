@@ -2,13 +2,12 @@ from airflow.decorators import dag, task_group
 from airflow.operators.python import PythonOperator
 from airflow.models import Variable
 from airflow.utils.trigger_rule import TriggerRule
-from datetime import datetime
 from helper.callbacks.slack_notifier import slack_notifier
 from pendulum import datetime
 
 from flights_data_pipeline.tasks.extract import Extract
 from flights_data_pipeline.tasks.load import Load
-from flights_data_pipeline.tasks.transform import Transform
+from flights_data_pipeline.tasks.transform import QUERY_DIR, Transform
 
 # Fallbacks keep the DAG parseable before include/variables.json is imported
 DEFAULT_TABLES = [
@@ -45,7 +44,6 @@ def extract_group(table_list):
             task_id=f"{table}",
             python_callable=Extract._pacflight_db,
             op_kwargs={'table_name': table, 'incremental': incremental},
-            provide_context=True,            
             do_xcom_push=True
         )        
 
@@ -53,12 +51,6 @@ def extract_group(table_list):
 def load_group(tables_with_pkey):
     incremental = is_incremental()
     load_tasks = []
-
-    # Debugging - log tables_with_pkey untuk memastikan format
-    # print(f"Tables with Pkey: {tables_with_pkey}")
-    
-    # tables_with_pkey = eval(tables_with_pkey) if isinstance(tables_with_pkey, str) else tables_with_pkey
-    # print(f"Evaluated Tables with Pkey: {tables_with_pkey}")
 
     for table, pkey in tables_with_pkey.items():
         task = PythonOperator(
@@ -69,7 +61,6 @@ def load_group(tables_with_pkey):
                 'incremental': incremental,
                 'table_pkey': tables_with_pkey
             },
-            provide_context=True,
             trigger_rule=TriggerRule.NONE_FAILED                        
         )
         load_tasks.append(task)
@@ -80,14 +71,12 @@ def load_group(tables_with_pkey):
 
 @task_group(group_id="transform")
 def transform_group(transform_tables):
-    from airflow.models.baseoperator import chain
-
     previous = None
     for table in transform_tables:
         transform = Transform.build_operator(
             task_id=f"{table}",
             table_name=table,            
-            sql_dir="flights_data_pipeline/query/final"
+            sql_dir="final"
         )
 
         transform.trigger_rule = TriggerRule.NONE_FAILED
@@ -102,10 +91,11 @@ def transform_group(transform_tables):
 @dag(
     dag_id='flights_data_pipeline',
     start_date=datetime(2025, 1, 1),
-    schedule_interval='@daily',
+    schedule='@daily',
     catchup=True,
     max_active_runs=1,
-    default_args=default_args,    
+    default_args=default_args,
+    template_searchpath=[str(QUERY_DIR)],
     tags=['pacflight', 'ETL']
 )
 def flights_data_pipeline():
