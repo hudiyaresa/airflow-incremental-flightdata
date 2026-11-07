@@ -6,7 +6,7 @@ def slack_notifier(context):
     task_state = context.get('task_instance').state
     task_id = context.get('task_instance').task_id
     dag_id = context.get('task_instance').dag_id
-    task_exec_date = context.get('execution_date')
+    task_exec_date = context.get('logical_date')
     task_log_url = context.get('task_instance').log_url
     exception = context.get('exception') if context.get('exception') else 'No exception'
     traceback = "".join(tb.format_exception(type(exception), exception, exception.__traceback__)) if context.get('exception') else 'No traceback'
