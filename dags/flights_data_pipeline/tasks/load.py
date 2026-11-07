@@ -3,9 +3,8 @@ from airflow.exceptions import AirflowSkipException, AirflowException
 from helper.minio import CustomMinio
 from pangres import upsert
 from sqlalchemy import create_engine
-from datetime import timedelta
+from flights_data_pipeline.tasks.window import object_name as build_object_name
 import logging
-import pandas as pd
 
 
 class Load:
@@ -27,8 +26,7 @@ class Load:
             raise AirflowSkipException(f"[Load] Skipped {table_name} karena tidak ada data dari extract.")
 
         table_pkey = kwargs.get("table_pkey")
-        object_date = (pd.to_datetime(date) - timedelta(days=1)).strftime("%Y-%m-%d")
-        object_name = f"/temp/{table_name}-{object_date}.csv" if incremental else f"/temp/{table_name}.csv"
+        object_name = build_object_name(table_name, incremental, kwargs["data_interval_start"])
         bucket_name = "extracted-data"
 
         engine = create_engine(PostgresHook(postgres_conn_id="warehouse_pacflight").get_uri())
@@ -42,7 +40,6 @@ class Load:
                 ti.xcom_push(key="return_value", value={"status": "skipped", "data_date": date})                
                 raise AirflowSkipException(f"[Load] Skipping {table_name}: CSV is empty")
 
-            # df = df.set_index(table_pkey)
             df = df.set_index(table_pkey[table_name])
 
             upsert(
